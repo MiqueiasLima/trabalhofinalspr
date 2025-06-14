@@ -65,3 +65,4 @@ try:
     plotar_sensorgrama(x_mod, y_mod)
 except Exception as e:
     print(f"\nErro: {e}")
+    print("Teste")
