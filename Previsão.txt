@@ -1,0 +1,92 @@
+# === Instalar bibliotecas ===
+!pip install tensorflow scikit-learn matplotlib joblib scipy
+
+# === Importar bibliotecas ===
+import numpy as np
+import matplotlib.pyplot as plt
+from tensorflow.keras.models import load_model
+from tensorflow.keras.losses import MeanSquaredError
+from sklearn.preprocessing import MinMaxScaler
+from scipy.signal import savgol_filter
+import joblib
+from google.colab import files
+
+# === Parâmetros ===
+passos_a_frente = 30  # saída do modelo treinado (fixo)
+n_blocos = 2          # total de blocos para previsão (5 x 30 = 150 pontos)
+
+# === Upload do arquivo original ===
+print("Envie o arquivo .txt do sensorgrama original para previsão")
+arquivo = files.upload()
+nome_arquivo = list(arquivo.keys())[0]
+
+# === Carregar dados ===
+dados_originais = np.loadtxt(nome_arquivo)
+tamanho_total = len(dados_originais)
+print(f"Tamanho total do sensorgrama: {tamanho_total} pontos")
+
+# === Input do intervalo para janela de entrada ===
+while True:
+    try:
+        inicio = int(input(f"Digite o índice inicial (0 a {tamanho_total - 1}): "))
+        fim = int(input(f"Digite o índice final (maior que {inicio} e até {tamanho_total - 1}): "))
+        if 0 <= inicio < fim < tamanho_total:
+            break
+        else:
+            print("Intervalo inválido, tente novamente.")
+    except Exception as e:
+        print("Entrada inválida, digite números inteiros.")
+
+janela = fim - inicio + 1
+print(f"Janela selecionada de {inicio} até {fim} (tamanho {janela})")
+
+# === Upload e carregar scaler usado no treino ===
+print('Envie o arquivo scaler_spr_final.gz')
+uploaded_scaler = files.upload()
+nome_scaler = list(uploaded_scaler.keys())[0]
+scaler = joblib.load(nome_scaler)
+
+# Normalizar dados originais
+dados_norm = scaler.transform(dados_originais.reshape(-1, 1)).flatten()
+
+# === Upload e carregar modelo treinado ===
+print('Envie o arquivo do modelo treinado (.h5 ou .keras)')
+uploaded_model = files.upload()
+nome_modelo = list(uploaded_model.keys())[0]
+
+# Carregar modelo com compile=False e recompilar
+modelo = load_model(nome_modelo, compile=False)
+modelo.compile(optimizer='adam', loss=MeanSquaredError())
+
+# === Preparar janela para previsão ===
+entrada = dados_norm[inicio:fim+1]
+
+# === Previsão sequencial de 150 pontos (5 blocos de 30) ===
+entrada_atual = entrada.copy()
+preditos = []
+
+for _ in range(n_blocos):
+    entrada_reshape = entrada_atual.reshape(1, janela, 1)
+    previsao = modelo.predict(entrada_reshape, verbose=0).flatten()
+    preditos.extend(previsao)
+    entrada_atual = np.concatenate([entrada_atual[passos_a_frente:], previsao])
+
+# === Desnormalizar previsão ===
+preditos_real = scaler.inverse_transform(np.array(preditos).reshape(-1, 1)).flatten()
+
+# === Suavizar previsão com Savitzky-Golay ===
+window_length = 11 if len(preditos_real) >= 11 else len(preditos_real) | 1  # sempre ímpar
+preditos_suavizado = savgol_filter(preditos_real, window_length=window_length, polyorder=3)
+
+# === Plotar resultado ===
+plt.figure(figsize=(15, 6))
+plt.plot(range(inicio, fim+1), dados_originais[inicio:fim+1], label="Janela de Entrada")
+plt.plot(range(fim+1, fim+1 + len(preditos_suavizado)), preditos_suavizado, label=f"Previsão Suavizada ({len(preditos_suavizado)} pontos)", color='orange')
+plt.axvline(x=fim, color='gray', linestyle='--')
+plt.title(f"Previsão SPR Suavizada - {nome_arquivo} | {len(preditos_suavizado)} pontos após intervalo [{inicio}, {fim}]")
+plt.xlabel("Índice do ponto")
+plt.ylabel("Reflectância")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
