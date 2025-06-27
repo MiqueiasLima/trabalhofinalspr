@@ -14,8 +14,8 @@ ROC,
 sensibilidade
 
 Prever: 
-MSE(Mean Absolute Error (Erro Absoluto Médio)), 
-MAE(Mean Squared Error (Erro Quadrático Médio))
+MSE(Mean Squared Error (Erro Quadrático Médio)),
+MAE(Mean Absolute Error (Erro Absoluto Médio))
 RMSE – Root Mean Squared Error (Raiz do Erro Quadrático Médio)
 Quantile Loss / Pinball Loss
 MASE – Mean Absolute Scaled Error
